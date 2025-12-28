@@ -8,25 +8,31 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '100mb' })); app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '100mb' })); 
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // NVIDIA NIM API configuration
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
-// 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
-
-// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = false; // Set to true to enable chat_template_kwargs thinking parameter
+// SETTINGS
+const SHOW_REASONING = true;       // Set to true to show reasoning with <think> tags
+const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
+  // CRITICAL FIX: Added the name you are using in Janitor
+  '3.2 deepseek': 'deepseek-ai/deepseek-v3.2',
+  'deepseek': 'deepseek-ai/deepseek-v3.2',
+  
+  // CRITICAL FIX: Changed V3.2 to v3.2 (lowercase v)
+  'gpt-4': 'deepseek-ai/deepseek-v3.2',
+  
+  // Your original mappings
   'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  'gpt-4': 'deepseek-ai/deepseek-V3.2',
   'gpt-4-turbo': 'moonshotai/kimi-k2-thinking',
   'gpt-4o': 'deepseek-ai/deepseek-v3.1-terminus',
-  'claude-3-opus': 'openai/gpt-oss-120b',
+  'claude-3-opus': 'deepseek-ai/deepseek-r1', // Suggest updating this to R1
   'claude-3-sonnet': 'openai/gpt-oss-20b',
   'deepseek-ai/deepseek-v3.1-terminus': 'qwen/qwen3-next-80b-a3b-thinking' 
 };
@@ -61,8 +67,10 @@ app.post('/v1/chat/completions', async (req, res) => {
   try {
     const { model, messages, temperature, max_tokens, stream } = req.body;
     
-    // Smart model selection with fallback
+    // 1. Resolve Model ID
     let nimModel = MODEL_MAPPING[model];
+    
+    // Fallback logic from your original code
     if (!nimModel) {
       try {
         await axios.post(`${NIM_API_BASE}/chat/completions`, {
@@ -86,22 +94,30 @@ app.post('/v1/chat/completions', async (req, res) => {
         } else if (modelLower.includes('claude') || modelLower.includes('gemini') || modelLower.includes('70b')) {
           nimModel = 'meta/llama-3.1-70b-instruct';
         } else {
-          nimModel = 'meta/llama-3.1-8b-instruct';
+          // If 3.2 deepseek is somehow missed, default to deepseek v3.2
+          if (modelLower.includes('deepseek')) nimModel = 'deepseek-ai/deepseek-v3.2';
+          else nimModel = 'meta/llama-3.1-8b-instruct';
         }
       }
     }
     
-    // Transform OpenAI request to NIM format
+    // 2. Prepare Request
     const nimRequest = {
       model: nimModel,
       messages: messages,
       temperature: temperature || 0.6,
-      max_tokens: max_tokens || 9024,
-      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
+      max_tokens: max_tokens || 8192,
       stream: stream || false
     };
+
+    // 3. Inject Thinking Parameter (The Python Fix)
+    if (ENABLE_THINKING_MODE) {
+        nimRequest.extra_body = { 
+            chat_template_kwargs: { thinking: true } 
+        };
+    }
     
-    // Make request to NVIDIA NIM API
+    // 4. Send to NVIDIA
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
@@ -110,8 +126,8 @@ app.post('/v1/chat/completions', async (req, res) => {
       responseType: stream ? 'stream' : 'json'
     });
     
+    // 5. Handle Response
     if (stream) {
-      // Handle streaming response with reasoning
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -159,11 +175,8 @@ app.post('/v1/chat/completions', async (req, res) => {
                     delete data.choices[0].delta.reasoning_content;
                   }
                 } else {
-                  if (content) {
-                    data.choices[0].delta.content = content;
-                  } else {
-                    data.choices[0].delta.content = '';
-                  }
+                  // Ensure we don't break if reasoning is hidden
+                  if (!content) data.choices[0].delta.content = ''; 
                   delete data.choices[0].delta.reasoning_content;
                 }
               }
@@ -181,7 +194,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         res.end();
       });
     } else {
-      // Transform NIM response to OpenAI format with reasoning
+      // Non-streaming response
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
@@ -218,7 +231,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     
     res.status(error.response?.status || 500).json({
       error: {
-        message: error.message || 'Internal server error',
+        message: error.response?.data?.error?.message || error.message || 'Internal server error',
         type: 'invalid_request_error',
         code: error.response?.status || 500
       }
