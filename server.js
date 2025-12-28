@@ -1,4 +1,6 @@
-// server.js - OpenAI to NVIDIA NIM API Proxy
+// server.js - "The Python Mirror"
+// This code copies the EXACT settings from your working Python script.
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -8,215 +10,149 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '100mb' })); 
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// NVIDIA NIM API configuration
-const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
-// Ensure this matches the key in your Python script!
-const NIM_API_KEY = process.env.NIM_API_KEY;
+// ------------------------------------------------------------------
+// 1. HARDCODED CONFIGURATION (Matches your Python Script exactly)
+// ------------------------------------------------------------------
+const NIM_API_BASE = 'https://integrate.api.nvidia.com/v1';
 
-// 🔥 REASONING DISPLAY TOGGLE
-const SHOW_REASONING = true; 
+// We hardcode the key to rule out "Environment Variable" errors
+const NIM_API_KEY = "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";
 
-// 🔥 THINKING MODE TOGGLE
-const ENABLE_THINKING_MODE = true; 
+const TARGET_MODEL = "deepseek-ai/deepseek-v3.2";
+const ENABLE_THINKING = true;
 
-// Model mapping
-const MODEL_MAPPING = {
-  // MATCHING YOUR PYTHON SCRIPT:
-  '3.2 deepseek': 'deepseek-ai/deepseek-v3.2',
-  'deepseek': 'deepseek-ai/deepseek-v3.2',
-  'gpt-4': 'deepseek-ai/deepseek-v3.2',
-  
-  // Other mappings
-  'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  'gpt-4-turbo': 'moonshotai/kimi-k2-thinking',
-  'gpt-4o': 'deepseek-ai/deepseek-v3.1-terminus',
-  'claude-3-opus': 'deepseek-ai/deepseek-r1',
-  'claude-3-sonnet': 'openai/gpt-oss-20b',
-  'deepseek-ai/deepseek-v3.1-terminus': 'qwen/qwen3-next-80b-a3b-thinking' 
-};
+// ------------------------------------------------------------------
+// 2. SERVER ROUTES
+// ------------------------------------------------------------------
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    service: 'OpenAI to NVIDIA NIM Proxy', 
-    reasoning_display: SHOW_REASONING
+app.get('/health', (req, res) => res.json({ status: 'ok', msg: 'Proxy Live' }));
+
+app.get('/v1/models', (req, res) => {
+  res.json({
+    object: 'list',
+    data: [{ id: TARGET_MODEL, object: 'model', created: Date.now(), owned_by: 'nvidia' }]
   });
 });
 
-// List models endpoint
-app.get('/v1/models', (req, res) => {
-  const models = Object.keys(MODEL_MAPPING).map(model => ({
-    id: model,
-    object: 'model',
-    created: Date.now(),
-    owned_by: 'nvidia-nim-proxy'
-  }));
-  res.json({ object: 'list', data: models });
-});
-
-// Chat completions endpoint
 app.post('/v1/chat/completions', async (req, res) => {
   try {
-    const { model, messages, temperature, max_tokens, stream } = req.body;
-    
-    // Resolve model
-    let nimModel = MODEL_MAPPING[model] || model;
-    
-    // Fallback
-    if (!MODEL_MAPPING[model] && !nimModel.includes('/')) {
-         if (model.toLowerCase().includes('deepseek')) nimModel = 'deepseek-ai/deepseek-v3.2';
-    }
+    console.log(`[Proxy] New Request. Mapping to: ${TARGET_MODEL}`);
 
-    // Construct Request
+    // 1. Prepare Request (Exactly matching Python parameters)
     const nimRequest = {
-      model: nimModel,
-      messages: messages,
-      temperature: temperature || 0.6,
-      max_tokens: max_tokens || 8192,
-      stream: stream || false
+      model: TARGET_MODEL,
+      messages: req.body.messages,
+      // Python used temperature=1, top_p=0.95
+      temperature: 1, 
+      top_p: 0.95,
+      max_tokens: 8192,
+      stream: true, // Force stream to prevent timeouts
+      
+      // The parameter that enables reasoning
+      chat_template_kwargs: { thinking: true }
     };
 
-    // INJECT THINKING (Matches Python's extra_body logic)
-    // The Python SDK merges extra_body into the root, so we add it to the root here.
-    if (ENABLE_THINKING_MODE) {
-        nimRequest.chat_template_kwargs = { thinking: true };
-    }
-    
-    // Send to NVIDIA
+    // 2. Send to NVIDIA
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      responseType: stream ? 'stream' : 'json'
+      responseType: 'stream' // We must use stream to handle the thinking process
     });
-    
-    if (stream) {
-      // Stream Handling
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
+
+    // 3. Setup Stream Response to Janitor
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    let buffer = '';
+    let reasoningStarted = false;
+
+    // 4. Process the Stream
+    response.data.on('data', (chunk) => {
+      // Decode chunk
+      const text = chunk.toString();
+      buffer += text;
       
-      let buffer = '';
-      let reasoningStarted = false;
-      
-      response.data.on('data', (chunk) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        
-        lines.forEach(line => {
-          if (line.startsWith('data: ')) {
-            if (line.includes('[DONE]')) {
-              res.write(line + '\n');
-              return;
-            }
+      // Process full lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line
+
+      lines.forEach(line => {
+        if (!line.startsWith('data: ')) return;
+        if (line.includes('[DONE]')) {
+          res.write(line + '\n\n');
+          return;
+        }
+
+        try {
+          // Parse JSON
+          const jsonStr = line.replace('data: ', '');
+          const data = JSON.parse(jsonStr);
+          
+          if (data.choices && data.choices.length > 0) {
+            const delta = data.choices[0].delta;
             
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta) {
-                const reasoning = data.choices[0].delta.reasoning_content;
-                const content = data.choices[0].delta.content;
-                
-                if (SHOW_REASONING) {
-                  let combinedContent = '';
-                  
-                  if (reasoning && !reasoningStarted) {
-                    combinedContent = '<think>\n' + reasoning;
+            // Logic: Capture "reasoning_content" and turn it into standard "content" for Janitor
+            // This matches the Python script's print logic
+            if (delta.reasoning_content) {
+                if (!reasoningStarted) {
+                    // Start of thinking
+                    delta.content = '<think>\n' + delta.reasoning_content;
                     reasoningStarted = true;
-                  } else if (reasoning) {
-                    combinedContent = reasoning;
-                  }
-                  
-                  if (content && reasoningStarted) {
-                    combinedContent += '</think>\n\n' + content;
-                    reasoningStarted = false;
-                  } else if (content) {
-                    combinedContent += content;
-                  }
-                  
-                  if (combinedContent) {
-                    data.choices[0].delta.content = combinedContent;
-                    delete data.choices[0].delta.reasoning_content;
-                  }
                 } else {
-                  if (!content) data.choices[0].delta.content = '';
-                  delete data.choices[0].delta.reasoning_content;
+                    // Continuing thinking
+                    delta.content = delta.reasoning_content;
                 }
-              }
-              res.write(`data: ${JSON.stringify(data)}\n\n`);
-            } catch (e) {
-              res.write(line + '\n');
+                // IMPORTANT: Remove reasoning_content so we don't send it twice
+                delete delta.reasoning_content;
+            } else if (delta.content) {
+                if (reasoningStarted) {
+                    // End of thinking, start of normal text
+                    delta.content = '</think>\n\n' + delta.content;
+                    reasoningStarted = false;
+                }
+                // Else: normal text
             }
           }
-        });
+
+          // Write back to Janitor
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        } catch (e) {
+          // Ignore parse errors for keep-alive packets
+        }
       });
-      
-      response.data.on('end', () => res.end());
-      response.data.on('error', (err) => {
-        console.error('Stream error:', err);
-        res.end();
-      });
-    } else {
-      // Non-Streaming Response
-      const openaiResponse = {
-        id: response.data.id,
-        object: 'chat.completion',
-        created: response.data.created,
-        model: model,
-        choices: response.data.choices.map(choice => {
-          let fullContent = choice.message?.content || '';
-          
-          if (SHOW_REASONING && choice.message?.reasoning_content) {
-            fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
-          }
-          
-          return {
-            index: choice.index,
-            message: {
-              role: choice.message.role,
-              content: fullContent
-            },
-            finish_reason: choice.finish_reason
-          };
-        }),
-        usage: response.data.usage
-      };
-      
-      res.json(openaiResponse);
-    }
-    
-  } catch (error) {
-    // Log the FULL error from Nvidia to help debug
-    console.error('Proxy error:', error.message);
-    if (error.response) {
-        console.error('Nvidia Response:', JSON.stringify(error.response.data));
-    }
-    
-    res.status(error.response?.status || 500).json({
-      error: {
-        message: error.message || 'Internal server error',
-        type: 'invalid_request_error',
-        code: error.response?.status || 500
-      }
     });
+
+    response.data.on('end', () => res.end());
+    
+    response.data.on('error', (err) => {
+      console.error('Stream Error:', err);
+      res.end();
+    });
+
+  } catch (error) {
+    console.error('Connection Error:', error.message);
+    if (error.response) {
+       console.error('Nvidia Response:', error.response.status, error.response.statusText);
+       // Try to log data if possible
+       try { console.error('Data:', JSON.stringify(error.response.data)); } catch(e){}
+    }
+    
+    // If we haven't started streaming, send JSON error
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: "Proxy Connection Failed", code: 500 } });
+    } else {
+      res.end();
+    }
   }
 });
 
-app.all('*', (req, res) => {
-  res.status(404).json({
-    error: {
-      message: `Endpoint ${req.path} not found`,
-      type: 'invalid_request_error',
-      code: 404
-    }
-  });
-});
+// Catch-all
+app.all('*', (req, res) => res.status(404).json({ error: "Use /v1/chat/completions" }));
 
-app.listen(PORT, () => {
-  console.log(`Proxy running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Proxy running on port ${PORT}`));
