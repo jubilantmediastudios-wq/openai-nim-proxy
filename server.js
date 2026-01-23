@@ -18,7 +18,7 @@ const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.c
 const NIM_API_KEY = "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";
 
 // 🔥 REASONING DISPLAY TOGGLE
-const SHOW_REASONING = true; 
+const SHOW_REASONING = false; 
 
 // 🔥 THINKING MODE TOGGLE
 const ENABLE_THINKING_MODE = true; 
