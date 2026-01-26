@@ -15,7 +15,7 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 
 // [CHANGED] Using the working key from your Python script
-const NIM_API_KEY = "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";
+const NIM_API_KEY = "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";
 
 // 🔥 REASONING DISPLAY TOGGLE
 const SHOW_REASONING = false; 
