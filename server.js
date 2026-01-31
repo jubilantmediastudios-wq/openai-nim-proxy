@@ -30,7 +30,7 @@ const MODEL_MAPPING = {
   'deepseek': 'deepseek-ai/deepseek-v3.2',
   
   // [FIXED] Changed V3.2 to v3.2 (lowercase)
-  'gpt-4': 'deepseek-ai/deepseek-v3.2',
+  'gpt-4': 'qwen/qwen3-next-80b-a3b-thinking',
   
   // Your original list
   'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
