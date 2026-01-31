@@ -25,12 +25,12 @@ const ENABLE_THINKING_MODE = false;
 // ==========================================
 const MODEL_MAPPING = {
   // Use 'deepseek-v3' as it replaces the retired 'r1' IDs
-  'deepseek': 'deepseek-ai/deepseek-v3',
+  'deepseek': 'deepseek-ai/deepseek-v3.2',
   '3.2 deepseek': 'deepseek-ai/deepseek-v3',
   
   // High-performance fallbacks
-  'gpt-4o': 'meta/llama-3.3-70b-instruct',
-  'gpt-4': 'deepseek-ai/deepseek-v3',
+  'gpt-4o': 'moonshotai/kimi-k2-thinking',
+  'gpt-4': 'moonshotai/kimi-k2.5',
   'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-70b-instruct',
   'claude-3-opus': 'meta/llama-3.1-405b-instruct'
 };
