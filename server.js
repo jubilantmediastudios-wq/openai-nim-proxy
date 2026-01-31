@@ -22,7 +22,7 @@ const SHOW_REASONING = true;
 
 // Set to true ONLY if using DeepSeek R1/V3 models that support the 'thinking' parameter.
 // If you get 400 errors, set this to false.
-const ENABLE_THINKING_MODE = true; 
+const ENABLE_THINKING_MODE = false; 
 
 // ==========================================
 // MIDDLEWARE
