@@ -26,7 +26,7 @@ const ENABLE_THINKING_MODE = true;
 const MODEL_MAPPING = {
   // Use 'deepseek-v3' as it replaces the retired 'r1' IDs
   'deepseek': 'deepseek-ai/deepseek-v3.2',
-  '3.2 deepseek': 'deepseek-ai/deepseek-v3',
+  '3.2 deepseek': 'z-ai/glm4.7',
   
   // High-performance fallbacks
   'gpt-4o': 'moonshotai/kimi-k2-thinking',
