@@ -18,7 +18,7 @@ const NIM_API_BASE = 'https://integrate.api.nvidia.com/v1';
 const SHOW_REASONING = true; 
 
 // Toggle to send the 'thinking' parameter (only for specific DeepSeek models)
-const ENABLE_THINKING_MODE = false; 
+const ENABLE_THINKING_MODE = true; 
 
 // ==========================================
 // MODEL MAPPING (UPDATED FOR 2026)
