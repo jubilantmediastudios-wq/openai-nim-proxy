@@ -31,8 +31,8 @@ const MODEL_MAPPING = {
   // High-performance fallbacks
   'gpt-4o': 'moonshotai/kimi-k2-thinking',
   'gpt-4': 'moonshotai/kimi-k2.5',
-  'gpt-3.5-turbo': 'minimaxai/minimax-m2',
-  'claude-3-opus': 'meta/llama-3.1-405b-instruct'
+  'gpt-3.5-turbo': 'minimaxai/minimax-m2.1',
+  'claude-3-opus': 'qwen/qwen3.5-397b-a17b'
 };
 
 // ==========================================
