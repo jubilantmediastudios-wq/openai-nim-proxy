@@ -32,7 +32,7 @@ const MODEL_MAPPING = {
   'gpt-4o': 'moonshotai/kimi-k2-thinking',
   'gpt-4': 'moonshotai/kimi-k2.5',
   'gpt-3.5-turbo': 'minimaxai/minimax-m2.1',
-  'claude-3-opus': 'qwen/qwen3.5-397b-a17b'
+  'claude-3-opus': 'z-ai/glm4.7'
 };
 
 // ==========================================
